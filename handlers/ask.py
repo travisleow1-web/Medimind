@@ -125,12 +125,13 @@ async def got_question(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return ConversationHandler.END
 
     context.user_data["last_ask_ts"] = time.time()
-    await thinking_msg.edit_text(
-        f"{answer}\n\n"
-        "_I'm not a doctor — for anything specific to you, please check with a real "
-        "doctor or pharmacist._",
-        parse_mode="Markdown",
-    )
+    #await thinking_msg.edit_text(
+        #f"{answer}\n\n"
+        #"_I'm not a doctor — for anything specific to you, please check with a real "
+       # "doctor or pharmacist._",
+        #parse_mode="Markdown",
+    #)
+    await thinking_msg.edit_text(answer)
     return ConversationHandler.END
 
 

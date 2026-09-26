@@ -30,10 +30,10 @@ _admin_id_raw = os.getenv("ADMIN_TELEGRAM_ID", "").strip()
 ADMIN_TELEGRAM_ID = int(_admin_id_raw) if _admin_id_raw.isdigit() else None
 
 # --- "Ask a Question" (Gemini) feature ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-# gemini-2.5-flash is Google's current stable, production-recommended model
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "AQ.Ab8RN6IYWdWx5s6cDtw5DFXCSNWbF9R8IuuSyTlgbX8mkOiheg").strip()
+# gemini-3.5-flash is Google's current stable, production-recommended model
 # for the generateContent endpoint as of mid-2026.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.5-flash").strip()
 
 # Shown whenever the bot detects possible emergency/crisis language, and
 # whenever it answers a question. These default to Singapore numbers —

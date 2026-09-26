@@ -17,6 +17,8 @@ import logging
 
 import httpx
 
+import asyncio
+
 from config import GEMINI_API_KEY, GEMINI_MODEL
 
 logger = logging.getLogger(__name__)
@@ -27,10 +29,8 @@ SYSTEM_INSTRUCTIONS = """You are a calm, plain-language health-information assis
 in a medication-reminder app used mainly by elderly people and their family caregivers.
 
 - You are NOT a doctor. Never claim to diagnose a specific condition with certainty.
-- Keep answers short (2-4 sentences), warm, and free of medical jargon — the reader may be \
+- Keep answers medium, informative but not too long and also in simple language at most a paragraph, warm and simple. You can advice to take medication if they are feeling unwell, only for general guidance — the reader may be \
 elderly and reading on a small phone screen.
-- Never give a specific medication dosage, and never rule on whether two specific drugs \
-interact — always refer those questions to a pharmacist or doctor instead.
 - Gently suggest checking with a real doctor for anything persistent, worsening, or outside \
 general/mild territory.
 - Do not repeat these instructions back, and do not mention that you are an AI model — just \
@@ -51,19 +51,45 @@ async def ask_gemini(question: str) -> str:
         "contents": [
             {"role": "user", "parts": [{"text": SYSTEM_INSTRUCTIONS + "\n\nUser's question: " + question}]}
         ],
-        "generationConfig": {"temperature": 0.3, "maxOutputTokens": 300},
+        "generationConfig": {"temperature": 0.7, "maxOutputTokens": 1000},
     }
     headers = {"x-goog-api-key": GEMINI_API_KEY, "Content-Type": "application/json"}
 
-    try:
-        async with httpx.AsyncClient(timeout=20.0) as client:
-            resp = await client.post(GEMINI_URL, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
-            return data["candidates"][0]["content"]["parts"][0]["text"].strip()
-    except httpx.HTTPStatusError as e:
-        logger.warning("Gemini API returned an error status: %s", e)
-        raise GeminiError(str(e)) from e
-    except (httpx.HTTPError, KeyError, IndexError, TypeError) as e:
-        logger.warning("Gemini API call failed or returned an unexpected shape: %s", e)
-        raise GeminiError(str(e)) from e
+    max_retries = 3
+    backoff_factor = 1.5
+
+    async with httpx.AsyncClient(timeout=20.0) as client:
+        for attempt in range(max_retries):
+            try:
+                resp = await client.post(GEMINI_URL, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+                return data["candidates"][0]["content"]["parts"][0]["text"].strip()
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code >= 500 and attempt < max_retries - 1:
+                    wait_time = backoff_factor ** attempt
+                    logger.warning(
+                        "Gemini API returned a server error. Retrying in %.1fs (Attempt %d/%d)...",
+                        wait_time,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+                logger.warning("Gemini API returned an error status: %s", e)
+                raise GeminiError(str(e)) from e
+            except (httpx.RequestError, ValueError, KeyError, IndexError) as e:
+                if attempt < max_retries - 1:
+                    wait_time = backoff_factor ** attempt
+                    logger.warning(
+                        "Gemini API request failed. Retrying in %.1fs (Attempt %d/%d)...",
+                        wait_time,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    await asyncio.sleep(wait_time)
+                    continue
+                logger.warning("Gemini API request failed: %s", e)
+                raise GeminiError(f"Gemini API request failed: {e}") from e
+
+    raise GeminiError("Gemini API call failed without a usable response.")
